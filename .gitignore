@@ -1,3 +1,7 @@
+# Ignore datasets but keep documentation
+data/*
+!data/README.md
+
 # History files
 .Rhistory
 .Rapp.history

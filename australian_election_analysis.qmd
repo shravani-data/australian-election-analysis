@@ -1,0 +1,511 @@
+---
+title: "Australian Election Trends Analysis (2022–2025)"
+author: "Shravani Jadhav"
+format: 
+  html:
+    embed-resources: true
+    theme: cosmo
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
+```
+
+# **Overview**
+
+This project investigates the shift in Australian federal election voting patterns between 2022 and 2025, following the reported change where minor parties and independents collectively received more first preference votes than the Liberal–National Coalition in the 2025 federal election. The analysis examines whether this national voting shift is reflected across individual electorates and explores the demographic characteristics of electorates experiencing strong changes in voter preferences.
+
+# **Fact checker**
+
+```{r}
+## Load and combine the data
+
+# Load libraries
+library(tidyverse)
+library(sf)
+
+# Read in 2022 data, skipping the first row
+data_2022 <- read_csv("data/HouseDopByDivisionDownload-27966_2022.csv", 
+                      skip = 1) |>
+  mutate(year = 2022)
+
+# Read in 2025 data
+data_2025 <- read_csv("data/HouseDopByDivisionDownload-31496_2025.csv", 
+                      skip = 1) |> 
+  mutate(year = 2025)
+
+# Combine into one data frame
+data_combined <- bind_rows(data_2022, data_2025)
+
+# Check it looks right
+glimpse(data_combined)
+
+
+# See all unique parties
+data_combined |> 
+  distinct(PartyAb, PartyNm) |> 
+  arrange(PartyAb) |> 
+  print(n = 100)
+
+## Classify parties into groups
+
+data_classified <- data_combined |>
+  mutate(
+    PartyType = case_when(
+      PartyAb == "ALP" ~ "major_labour",
+      PartyAb %in% c("LP", "NP", "LNP", "CLP") ~ "major_coal",
+      TRUE ~ "minor_or_indep"
+  )
+  )
+
+# Check the classification looks right
+data_classified |> 
+  distinct(PartyAb, PartyNm, PartyType) |> 
+  arrange(PartyType) |> 
+  print(n = 100)
+
+
+## Calculate national first preference vote percentages
+
+first_prefs <- data_classified |>
+  filter(CountNumber == 0,
+         CalculationType == "Preference Count")
+
+# Calculate total votes per party type per year
+vote_shares <- first_prefs |>
+  group_by(year, PartyType) |>
+  summarise(total_votes = sum(CalculationValue, na.rm = TRUE)) |>
+  mutate(pct = total_votes / sum(total_votes) * 100) |>
+  ungroup()
+
+# View results
+vote_shares
+
+# Save processed data
+write_csv(data_classified, "data/data_classified.csv")
+
+```
+
+# **Spatial analysis**
+
+```{r}
+# Calculate vote share per electorate per year
+
+electorate_votes <- first_prefs |>
+  group_by(year, DivisionNm, PartyType) |>
+  summarise(total_votes = sum(CalculationValue, na.rm = TRUE)) |>
+  mutate(pct = total_votes / sum(total_votes) * 100) |>
+  ungroup()
+
+electorate_votes
+
+# Calculate percentage point change between 2022 and 2025
+
+electorate_change <- electorate_votes |>
+  select(year, DivisionNm, PartyType, pct) |>
+  pivot_wider(names_from = year, values_from = pct, names_prefix = "pct_") |>
+  mutate(
+    pct_change = pct_2025 - pct_2022,
+    trend_dir = case_when(
+      pct_change > 0 ~ "increase",
+      pct_change < 0 ~ "decrease",
+      TRUE ~ "no_change"
+    )
+  )
+
+# Save processed data
+write_csv(electorate_change, "data/electorate_change.csv")
+
+electorate_change
+```
+
+```{r}
+demographic <- read_csv(
+  "data/demographic-classification-as-at-4-march-2025.csv",
+  skip = 3
+) |>
+  select(1:3) |>
+  rename(
+    DivisionNm = 1,
+    DemographicClass = 2,
+    State = 3
+  )
+
+# Join demographic classifications to electorate change data
+electorate_change_demo <- electorate_change |>
+  left_join(demographic, by = "DivisionNm")
+
+# Summarise average pct_change by demographic class and party type
+demo_summary <- electorate_change_demo |>
+  filter(!is.na(DemographicClass)) |>
+  group_by(DemographicClass, PartyType) |>
+  summarise(avg_pct_change = mean(pct_change, na.rm = TRUE)) |>
+  ungroup()
+
+demo_summary
+
+# Bar chart visualisation for demographic summary
+ggplot(demo_summary, aes(x = DemographicClass, y = avg_pct_change, fill = PartyType)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c(
+    "major_coal" = "#0047AB",
+    "major_labour" = "#DE3533",
+    "minor_or_indep" = "#10C25B"
+  )) +
+  labs(
+    title = "Average change in first preference votes by demographic classification",
+    x = "Demographic Classification",
+    y = "Average % point change",
+    fill = "Party Type"
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+# **Demographic deep dive**
+
+```{r}
+## Selecting an Electorate with Significant Voting Shift
+# Exploratory analysis
+
+electorate_change |>
+  filter(PartyType == "minor_or_indep") |>
+  arrange(desc(pct_change)) |>
+  print(n = 20)
+
+electorate_change |>
+  filter(PartyType == "major_coal") |>
+  arrange(pct_change) |>
+  print(n = 20)
+
+electorate_change |>
+  filter(DivisionNm == "Monash", PartyType == "major_coal")
+
+census_g02 <- read_csv("data/2021Census_G02_VIC_SA1.csv")
+glimpse(census_g02)
+```
+
+```{r}
+## Analyse spatial distribution of demographic characteristics
+
+# Load the maps
+aec_map <- read_sf("data/vic-july-2021-esri/E_VIC21_region.shp") |>
+  mutate(Elect_div = toupper(Elect_div))
+
+vicmap_sa1_G02 <- read_sf("data/Geopackage_2021_G02_VIC_GDA2020/G02_VIC_GDA2020.gpkg",
+                           layer = "G02_SA1_2021_VIC")
+
+# Transform projection
+aec_map$geometry = st_transform(aec_map$geometry, 7844)
+
+
+# Get SA1 centroids
+vicmap_sa1_G02_w_centroid <- vicmap_sa1_G02 |>
+  mutate(centroid = st_centroid(geom))
+
+# Find which electorate each SA1 belongs to
+electoral_intersects = st_intersects(vicmap_sa1_G02_w_centroid$centroid, 
+                                     aec_map$geometry, 
+                                     sparse = FALSE)
+
+arr_ind = which(electoral_intersects == TRUE, arr.ind = TRUE)
+
+sa1_ind = arr_ind[,1]
+division_ind = arr_ind[,2]
+division_name = aec_map$Elect_div[division_ind]
+sa1_name = vicmap_sa1_G02_w_centroid$SA1_NAME_2021[sa1_ind]
+
+# Save SA1 to electorate mapping
+sa1_divisions = data.frame(SA1_NAME_2021 = sa1_name,
+                           DivisionNm = division_name)
+
+# Add electorate names to census data
+vicmap_sa1_G02_electorates <- vicmap_sa1_G02 |>
+  right_join(sa1_divisions)
+
+# Group by electorate and calculate averages
+vicmap_sa1_G02_electorates_grouped <- vicmap_sa1_G02_electorates |>
+  group_by(DivisionNm) |>
+  summarise(
+    mean_fam_income = mean(Median_tot_fam_inc_weekly, na.rm = TRUE),
+    mean_mortgage = mean(Median_mortgage_repay_monthly, na.rm = TRUE)
+  ) |>
+  ungroup()
+
+head(vicmap_sa1_G02_electorates_grouped)
+```
+
+```{r}
+
+# Create a separate dataset for Monash only
+monash_only <- vicmap_sa1_G02_electorates_grouped |>
+  filter(DivisionNm == "MONASH")
+
+
+# Plot 1 - median family income by electorate
+ggplot(vicmap_sa1_G02_electorates_grouped) +
+  geom_sf(aes(geometry = geom, fill = mean_fam_income)) +
+  geom_sf(data = monash_only, aes(geometry = geom), 
+          fill = NA, color = "red", linewidth = 1) +
+  scale_fill_gradient(low = "white", high = "darkgreen") +
+  labs(title = "Average median family income by electorate",
+       subtitle = "Victoria, 2021 Census. Monash highlighted in red.",
+       fill = "Avg median family\nincome (weekly $)") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+# Plot 2 - median mortgage repayment by electorate
+ggplot(vicmap_sa1_G02_electorates_grouped) +
+  geom_sf(aes(geometry = geom, fill = mean_mortgage)) +
+  geom_sf(data = monash_only, aes(geometry = geom), 
+          fill = NA, color = "red", linewidth = 1) +
+  scale_fill_gradient(low = "white", high = "darkblue") +
+  labs(title = "Average median mortgage repayment by electorate",
+       subtitle = "Victoria, 2021 Census. Monash highlighted in red.",
+       fill = "Avg median mortgage\n(monthly $)") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+## Quality checks on spatial join
+
+# How many SA1s didn't match any electorate?
+nrow(vicmap_sa1_G02) - nrow(vicmap_sa1_G02_electorates)
+
+# Any missing values in our key variables?
+vicmap_sa1_G02_electorates_grouped |>
+  summarise(
+    missing_income = sum(is.na(mean_fam_income)),
+    missing_mortgage = sum(is.na(mean_mortgage))
+  )
+
+# Compare Monash vs Rest of VIC for census variables
+vicmap_sa1_G02_electorates_grouped |>
+  mutate(is_monash = ifelse(DivisionNm == "MONASH", "Monash", "Rest of VIC")) |>
+  group_by(is_monash) |>
+  summarise(
+    avg_fam_income = mean(mean_fam_income, na.rm = TRUE),
+    avg_mortgage = mean(mean_mortgage, na.rm = TRUE)
+  )
+```
+
+```{r}
+## Explore demographic profile of selected electorate
+
+# Load libraries
+library(tidyverse)
+library(sf)
+
+# Load data
+g01 <- read_csv("data/2021Census_G01_VIC_SA1.csv") |>
+  mutate(SA1_CODE_2021 = as.character(SA1_CODE_2021)) |>
+  left_join(sa1_divisions, by = c("SA1_CODE_2021" = "SA1_NAME_2021")) |>
+  mutate(region = ifelse(DivisionNm == "MONASH", "Monash", "Rest of VIC"))
+
+g17a <- read_csv("data/2021Census_G17A_VIC_SA1.csv")
+
+
+# Tidy Age and Gender data
+g01_long <- g01 |>
+  select(SA1_CODE_2021, region, 
+         starts_with("Age_0_4"), starts_with("Age_5_14"),
+         starts_with("Age_15_19"), starts_with("Age_20_24"),
+         starts_with("Age_25_34"), starts_with("Age_35_44"),
+         starts_with("Age_45_54"), starts_with("Age_55_64"),
+         starts_with("Age_65_74"), starts_with("Age_75_84"),
+         starts_with("Age_85ov"),
+         -ends_with("_P")) |>
+  pivot_longer(cols = -c(SA1_CODE_2021, region),
+               names_to = "category",
+               values_to = "count") |>
+  mutate(
+    sex = str_extract(category, "[MF]$"),
+    age = str_remove(category, "_[MF]$") |>
+          str_remove("Age_") |>
+          str_remove("_yr")
+  )
+
+
+# PLOT 1 - AGE DISTRIBUTION
+g01_long |>
+  filter(region == "Monash") |>
+  group_by(age) |>
+  summarise(total = sum(count, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(age = fct_relevel(age, "0_4", "5_14", "15_19", "20_24", 
+                           "25_34", "35_44", "45_54", "55_64", 
+                           "65_74", "75_84", "85ov")) |>
+  ggplot(aes(x = age, y = total)) +
+  geom_col(fill = "steel blue") +
+  labs(title = "Age distribution in Monash",
+       subtitle = "2021 Census",
+       x = "Age group", y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+# PLOT 2 - GENDER DISTRIBUTION
+g01 |>
+  filter(region == "Monash") |>
+  summarise(Male = sum(Tot_P_M, na.rm = TRUE),
+            Female = sum(Tot_P_F, na.rm = TRUE)) |>
+  pivot_longer(cols = everything(),
+               names_to = "gender",
+               values_to = "count") |>
+  ggplot(aes(x = gender, y = count, fill = gender)) +
+  geom_col() +
+  scale_color_viridis_c() +
+  labs(title = "Gender distribution in Monash",
+       subtitle = "2021 Census",
+       x = "Gender", y = "Count", fill = "Gender") +
+  theme_bw()
+
+
+# Tidy income data
+g17_long <- g17a |>
+  pivot_longer(cols = -1, names_to = "category", values_to = "count") |>
+  filter(!str_detect(category, "Tot"),
+         !str_detect(category, "PI_NS")) |>
+  mutate(
+    category = str_replace(category, "Neg_Nil_income", "-Inf_0"),
+    category = str_replace(category, "Neg_Nil_incme", "-Inf_0"),
+    category = str_replace(category, "Negtve_Nil_incme", "-Inf_0"),
+    category = str_replace(category, "more", "Inf"),
+    category = str_replace(category, "85ov", "85_110_yrs"),
+    category = str_replace(category, "85_yrs_ovr", "85_110_yrs")
+  ) |>
+  separate_wider_delim(category, delim = "_",
+                       names = c("sex", "income_min", "income_max", "age_min", "age_max", "extra"),
+                       too_many = "drop",
+                       too_few = "align_start") |>
+  mutate(
+    income_bracket = paste(income_min, income_max, sep = "_"),
+    SA1_CODE_2021 = as.character(SA1_CODE_2021)
+  ) |>
+  left_join(sa1_divisions, by = c("SA1_CODE_2021" = "SA1_NAME_2021")) |>
+  mutate(region = ifelse(DivisionNm == "MONASH", "Monash", "Rest of VIC"))
+
+# PLOT 3 - INCOME DISTRIBUTION
+g17_long |>
+  filter(region == "Monash",
+         sex %in% c("M", "F")) |>
+  group_by(income_bracket, income_min) |>
+  summarise(total = sum(count, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(income_min = as.numeric(income_min),
+         income_bracket = fct_reorder(income_bracket, income_min)) |>
+  ggplot(aes(x = income_bracket, y = total)) +
+  geom_col(fill = "steel blue") +
+  labs(title = "Income distribution in Monash",
+       subtitle = "2021 Census",
+       x = "Income bracket (weekly $)", y = "Count") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+# **Key Findings**
+
+### **Fact Checker method and results**
+
+### Method:
+
+To fact-check the claim made by the Australia Institute, I gathered the distribution of the first preference votes by candidates and divisions for the 2022 and 2025 federal elections. I put these two sets of data together into a single dataframe along with a new year variable indicating which year an entry belongs to. Afterwards, I created a party category which then classified each party into one of three groups using case_when() in R:
+
+-   major_labour – Australian Labor Party (ALP)
+
+-   major_coal – Liberal Party (LP), National Party (NP), Liberal National Party (LNP), and Country Liberal Party (CLP)
+
+-   minor_or_indep – any other parties and independents (including Greens and One Nation)
+
+The calculation for the national vote share of the first preference was performed by filtering first preference votes (CountNumber == 0 & CalculationType == "Preference Count") and summing up the votes by PartyType within years to compute the proportion.
+
+The AEC election data is publicly available and free to use under the Commonwealth of Australia copyright. The ABS Census data is similarly available under Creative Commons Attribution 4.0 International licence (CC BY 4.0).
+
+### Results:
+
+My estimated Coalition first preference vote for 2025 was 31.8% which is almost similar but not fully equal to the 32% obtained by the Australia Institute's report. The difference could be because of rounding, which was done in the article. It is clear that the claim made by the Australia Institute is correct. In 2025, the minor parties and independents have more first preference votes compared to the coalition for the first time in history; this translates to 33.6% compared to 31.8%. This is an unprecedented change considering that in 2022, the minor parties and independents had 31.7% while the coalition had 35.7%.
+
+### **Spatial Analysis method and results**
+
+### Method
+
+To see whether there was a consistency in the pattern observed at the national level spatially, the change in vote share at the electorate level was compared against the demographic classification of the AEC (as at 4 March 2025). Each electorate is classified according to one of the following categories: Inner Metropolitan, Outer Metropolitan, Provincial, and Rural.
+
+The independent/minor party votes in some electorates could potentially be zero in either or both years since no independent/minor party candidate contested. Such electorates could be in Rural or Provincial electorates. This could result in overstating or understating the percentage points gained by major parties depending on whether there were no independent/minor parties in either of the two years.
+
+### Results
+
+The bar graph indicates the average percentage change in the share of first-preference votes between 2022 and 2025, for each demographic classification. As shown in the bar chart below, the national trend was seen in all four demographic classifications:
+
+-   The Coalition lost ground in all four classifications, but the biggest decline occurred in Outer Metropolitan seats (-4.7%), while the least decline occurred in Provincial seats (-2.6%)
+
+-   Labor saw an increase in all four demographic classifications, but the largest gain came in Outer Metropolitan seats (+2.7%)
+
+-   Minor parties and independents showed an increase in all four demographic classifications, with the biggest increase occurring in Rural seats (+3.1%)
+
+It can be concluded from these results that the national pattern is not specific to any type of electorate but rather represents a pattern in individual electorates.
+
+### **Demographic Deep Dive and Results**
+
+The electorate of Monash was chosen to be studied due to its strong swing towards independents and minor parties (+11.3%), along with an evident swing against the Coalition Party (-6.0%) within the time frame of 2022-2025. The electorate of Monash is located in Melbourne’s outer eastern suburbs.
+
+### Census Variables -
+
+Two variables were selected from the 2021 ABS Census G02 dataset:
+
+-   Median weekly family income (`Median_tot_fam_inc_weekly`) - Historically wealthier communities supported the Coalition, making income an interesting variable to examine given the swing away from Coalition in electorates like Monash.
+
+-   Median monthly mortgage repayment (`Median_mortgage_repay_monthly`) — Housing affordability was one of the key issues in the 2025 election. Monthly mortgage repayments include both the stress related to paying off a loan and the value of property owned, which makes this particular variable different from just income measures. Higher mortgage payments usually correspond to high property prices.
+
+### Spatial Join Method -
+
+Census SA1 data was spatially joined to AEC electoral boundaries using the centroid method, where SA1 centroids were intersected with electorate boundary polygons. The VIC 2021 AEC boundaries were reprojected from GDA1994 to GDA2020 (EPSG:7844) to match the census spatial data.
+
+### Quality Checks and Limitations -
+
+-   Nine SA1s could not be matched to any electorate, likely because their centroids fell on boundaries or in water areas. No missing values were found for either census variable after joining.
+
+-   The census data is from 2021 while the electoral data is from 2025, a four year gap during which Monash's demographic profile may have changed. The census should therefore be treated as an approximation of the 2025 voter demographic.
+
+-   Aggregating SA1 level medians by taking the mean of medians is a methodological simplification that may slightly over or underestimate true electorate level values.
+
+### Results -
+
+Comparing Monash to the rest of Victoria:
+
+| Area | Avg median family income (weekly) | Avg median mortgage (monthly) |
+|----|----|----|
+| Monash | \$1,660 | \$1,470 |
+| Rest of VIC | \$2,184 | \$1,908 |
+
+Surprisingly, Monash scores even below the state average for both of these indicators, especially relative to inner Melbourne seats, indicating that it is not a typical high-income or high-mortgage electorate.
+
+The demographic plots reveal the following about Monash's voter profile:
+
+-   Age — The age distribution in Monash shows a notably older profile, with the largest groups being 55-64 and 65-74 year olds. Younger age groups (20-34) are underrepresented compared to older cohorts.
+
+-   Gender — The gender distribution in Monash electorate reflects a fairly even ratio between males and females in Monash – similar to the state norm.
+
+-   Income — The income distribution in Monash is concentrated within the lower-middle income levels and very few people belong to the higher income classes.
+
+Monash is broadly representative of Victoria in terms of gender distribution and age profile. But it falls below average with regard to family income levels and home mortgage payments as compared with other Victorian electorates. This makes the swing toward independents particularly interesting, driven not by wealthy inner-city Teal voters but by older, middle-income outer suburban residents.
+
+# **CITATIONS**
+
+Wickham H, Averick M, Bryan J, Chang W, McGowan LD, François R, Grolemund G, Hayes A, Henry L, Hester J, Kuhn M, Pedersen TL, Miller E, Bache SM, Müller K, Ooms J, Robinson D, Seidel DP, Spinu V, Takahashi K, Vaughan D, Wilke C, Woo K, Yutani H (2019). "Welcome to the tidyverse." *Journal of Open Source Software*, 4(43), 1686. doi:10.21105/joss.01686 <https://doi.org/10.21105/joss.01686>
+
+Pebesma E, Bivand R (2023). *Spatial Data Science: With Applications in R*. Chapman and Hall/CRC. <https://doi.org/10.1201/9780429459016>
+
+Pebesma E (2018). "Simple Features for R: Standardized Support for Spatial Vector Data." *The R Journal*, 10(1), 439-446. <https://doi.org/10.32614/RJ-2018-009>
+
+Australian Electoral Commission (2025). *House of Representatives Distribution of Preferences by Candidate by Division*. <https://results.aec.gov.au>
+
+Australian Electoral Commission (2021). *Electoral Boundaries GIS Data*. <https://www.aec.gov.au/electorates/gis/gis_datadownload.htm>
+
+Australian Electoral Commission (2025). *Demographic Classification of Electoral Divisions*. <https://www.aec.gov.au/electorates/maps.htm>
+
+Australian Bureau of Statistics (2021). *2021 Census of Population and Housing: General Community Profile*. <https://www.abs.gov.au/census>
+
+The Australia Institute (2025). *2025 Federal Election: Minor Parties and Independents Outpoll Coalition*. <https://australiainstitute.org.au>
