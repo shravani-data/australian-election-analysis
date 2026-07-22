@@ -1,16 +1,18 @@
 ---
 title: "Australian Election Trends Analysis (2022–2025)"
 author: "Shravani Jadhav"
-format: 
+format:
   html:
-    embed-resources: true
-    theme: cosmo
-editor: visual
+    toc: true
+  pdf:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE)
 ```
+
+\newpage
 
 # **Overview**
 
@@ -451,7 +453,7 @@ It can be concluded from these results that the national pattern is not specific
 
 The electorate of Monash was chosen to be studied due to its strong swing towards independents and minor parties (+11.3%), along with an evident swing against the Coalition Party (-6.0%) within the time frame of 2022-2025. The electorate of Monash is located in Melbourne’s outer eastern suburbs.
 
-### Census Variables -
+### Census Variables
 
 Two variables were selected from the 2021 ABS Census G02 dataset:
 
@@ -459,11 +461,11 @@ Two variables were selected from the 2021 ABS Census G02 dataset:
 
 -   Median monthly mortgage repayment (`Median_mortgage_repay_monthly`) — Housing affordability was one of the key issues in the 2025 election. Monthly mortgage repayments include both the stress related to paying off a loan and the value of property owned, which makes this particular variable different from just income measures. Higher mortgage payments usually correspond to high property prices.
 
-### Spatial Join Method -
+### Spatial Join Method
 
 Census SA1 data was spatially joined to AEC electoral boundaries using the centroid method, where SA1 centroids were intersected with electorate boundary polygons. The VIC 2021 AEC boundaries were reprojected from GDA1994 to GDA2020 (EPSG:7844) to match the census spatial data.
 
-### Quality Checks and Limitations -
+### Quality Checks and Limitations
 
 -   Nine SA1s could not be matched to any electorate, likely because their centroids fell on boundaries or in water areas. No missing values were found for either census variable after joining.
 
@@ -471,12 +473,12 @@ Census SA1 data was spatially joined to AEC electoral boundaries using the centr
 
 -   Aggregating SA1 level medians by taking the mean of medians is a methodological simplification that may slightly over or underestimate true electorate level values.
 
-### Results -
+### Results
 
 Comparing Monash to the rest of Victoria:
 
 | Area | Avg median family income (weekly) | Avg median mortgage (monthly) |
-|----|----|----|
+|------------------------|------------------------|------------------------|
 | Monash | \$1,660 | \$1,470 |
 | Rest of VIC | \$2,184 | \$1,908 |
 
@@ -484,13 +486,15 @@ Surprisingly, Monash scores even below the state average for both of these indic
 
 The demographic plots reveal the following about Monash's voter profile:
 
--   Age — The age distribution in Monash shows a notably older profile, with the largest groups being 55-64 and 65-74 year olds. Younger age groups (20-34) are underrepresented compared to older cohorts.
+-   Age - The age distribution in Monash shows a notably older profile, with the largest groups being 55-64 and 65-74 year olds. Younger age groups (20-34) are underrepresented compared to older cohorts.
 
--   Gender — The gender distribution in Monash electorate reflects a fairly even ratio between males and females in Monash – similar to the state norm.
+-   Gender - The gender distribution in Monash electorate reflects a fairly even ratio between males and females in Monash – similar to the state norm.
 
--   Income — The income distribution in Monash is concentrated within the lower-middle income levels and very few people belong to the higher income classes.
+-   Income - The income distribution in Monash is concentrated within the lower-middle income levels and very few people belong to the higher income classes.
 
 Monash is broadly representative of Victoria in terms of gender distribution and age profile. But it falls below average with regard to family income levels and home mortgage payments as compared with other Victorian electorates. This makes the swing toward independents particularly interesting, driven not by wealthy inner-city Teal voters but by older, middle-income outer suburban residents.
+
+\newpage
 
 # **CITATIONS**
 
