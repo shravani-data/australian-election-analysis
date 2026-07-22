@@ -10,7 +10,7 @@ The analysis combines Australian Electoral Commission (AEC) election data with A
 -   Determine whether the trend is consistent across different electorate types
 -   Explore the demographic characteristics of an electorate experiencing a strong swing
 
-**Full Report:** [View PDF Report](report/australian_election_analysis.pdf)
+**Full Report:** [View PDF Report](australian_election_analysis.pdf)
 
 ------------------------------------------------------------------------
 
