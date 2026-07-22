@@ -1,4 +1,4 @@
-# 2025 Federal Election: Fact-Check & Swing Analysis
+# Australian Election Trends Analysis (2022–2025)
 
 ## Overview
 
@@ -12,8 +12,6 @@ The analysis combines Australian Electoral Commission (AEC) election data with A
 
 **Full Report:** [View PDF Report](australian_election_analysis.pdf)
 
-------------------------------------------------------------------------
-
 ## Research Questions
 
 This project explores three key questions:
@@ -21,8 +19,6 @@ This project explores three key questions:
 1.  Does the reported national first-preference vote share hold when recalculated from raw AEC data?
 2.  Is the shift away from the Coalition consistent across electorates, or only visible at the national level?
 3.  What demographic characteristics describe an electorate with a strong voting shift?
-
-------------------------------------------------------------------------
 
 ## Key Findings
 
@@ -32,7 +28,7 @@ This project explores three key questions:
 
 ## Analytical Workflow
 
-### 1. Election Data Processing
+#### 1. Election Data Processing
 
 -   Combined AEC first-preference vote data from the 2022 and 2025 federal elections
 -   Standardised party classifications into:
@@ -41,13 +37,13 @@ This project explores three key questions:
     -   Minor parties and independents
 -   Calculated national and electorate-level vote shares
 
-### 2. Spatial Analysis
+#### 2. Spatial Analysis
 
 -   Compared electorate-level vote-share changes between elections
 -   Joined AEC electorate boundaries with ABS Census data using spatial methods
 -   Analysed demographic patterns by electorate
 
-### 3. Demographic Analysis
+#### 3. Demographic Analysis
 
 Examined the Monash electorate using ABS Census variables including:
 
@@ -56,32 +52,28 @@ Examined the Monash electorate using ABS Census variables including:
 -   Age distribution
 -   Gender distribution
 
-------------------------------------------------------------------------
-
 ## Tools & Technologies
 
-### Programming & Analysis
+#### Programming & Analysis
 
 -   R
 -   Tidyverse
 
-### Spatial Analysis
+#### Spatial Analysis
 
 -   `sf`
 -   Coordinate transformations
 -   Spatial joins
 
-### Reporting
+#### Reporting
 
 -   Quarto
 
-### Data Sources
+#### Data Sources
 
 -   Australian Electoral Commission (AEC) election results
 -   AEC electoral boundaries and classifications
 -   Australian Bureau of Statistics (ABS) 2021 Census
-
-------------------------------------------------------------------------
 
 ## Skills Demonstrated
 
@@ -94,8 +86,6 @@ Examined the Monash electorate using ABS Census variables including:
 -   Data visualisation
 -   Evidence-based reporting
 -   Reproducibility
-
-------------------------------------------------------------------------
 
 ## Project Context
 
