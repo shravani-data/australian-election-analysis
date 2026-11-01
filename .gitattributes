@@ -1,1 +1,6 @@
+# 1. Track your Quarto files as R code
 *.qmd linguist-language=R
+
+# 2. Hide the heavy HTML and JS output files from your language stats
+*.html linguist-detectable=false
+*.js linguist-detectable=false
